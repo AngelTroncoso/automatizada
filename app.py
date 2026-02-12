@@ -5,7 +5,6 @@ from google.oauth2.service_account import Credentials
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
-import time
 import json
 import os
 
@@ -16,6 +15,14 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Inicializar session state
+if "urls_cargadas" not in st.session_state:
+    st.session_state.urls_cargadas = []
+if "ultimo_intervalo" not in st.session_state:
+    st.session_state.ultimo_intervalo = 60
+if "auto_refresh_activos" not in st.session_state:
+    st.session_state.auto_refresh_activos = {}
 
 st.title("📊 Generador de Reportes Interactivos - Google Sheets")
 
@@ -49,7 +56,8 @@ def autenticar_google_sheets():
         st.error(f"Error al autenticar: {e}")
         return None
 
-# Función para cargar datos de Google Sheets
+# Función para cargar datos de Google Sheets con caché
+@st.cache_data(ttl=60)
 def cargar_datos_google_sheets(url):
     """Carga datos de un URL de Google Sheets"""
     try:
@@ -108,28 +116,33 @@ if metodo_carga == "📤 Subir archivo de texto":
     )
     if archivo_cargado:
         urls_sheets = procesar_archivo_urls(archivo_cargado)
-        st.sidebar.success(f"✅ {len(urls_sheets)} URL(s) cargada(s)")
+        if urls_sheets:
+            st.session_state.urls_cargadas = urls_sheets
+            st.sidebar.success(f"✅ {len(urls_sheets)} URL(s) cargada(s)")
 else:
     texto_urls = st.sidebar.text_area(
         "Pega las URLs de Google Sheets (una por línea):",
         height=100
     )
     urls_sheets = [url.strip() for url in texto_urls.split("\n") if url.strip()]
+    if urls_sheets:
+        st.session_state.urls_cargadas = urls_sheets
+
+# Usar URLs guardadas en session state si existen
+if not urls_sheets and st.session_state.urls_cargadas:
+    urls_sheets = st.session_state.urls_cargadas
 
 # Intervalo de actualización
 st.sidebar.divider()
 st.sidebar.subheader("2. Configuración de Actualización")
 intervalo_actualizacion = st.sidebar.slider(
     "Intervalo de actualización (segundos)",
-    min_value=10,
+    min_value=30,
     max_value=300,
     value=60,
     step=10
 )
-
-# Filtros
-st.sidebar.divider()
-st.sidebar.subheader("3. Filtros")
+st.session_state.ultimo_intervalo = intervalo_actualizacion
 
 # Contenido principal
 if urls_sheets:
@@ -141,22 +154,16 @@ if urls_sheets:
             st.subheader(f"Google Sheet #{tab_idx + 1}")
             st.caption(f"URL: {url[:60]}...")
             
-            # Botón para cargar datos
-            col1, col2, col3 = st.columns([1, 1, 1])
+            # Botón para limpiar caché y actualizar
+            col1, col2 = st.columns([1, 2])
             
             with col1:
-                if st.button(f"🔄 Actualizar Sheet {tab_idx + 1}", key=f"btn_{tab_idx}"):
-                    st.session_state[f"ultima_actualizacion_{tab_idx}"] = datetime.now()
+                if st.button(f"🔄 Actualizar", key=f"btn_{tab_idx}"):
+                    st.cache_data.clear()
+                    st.rerun()
             
             with col2:
-                actualizar_automaticamente = st.checkbox(
-                    f"Actualizar automáticamente",
-                    key=f"auto_{tab_idx}"
-                )
-            
-            with col3:
-                if actualizar_automaticamente:
-                    st.info(f"⏰ Se actualiza cada {intervalo_actualizacion}s")
+                st.caption("Haz clic para forzar actualización de datos")
             
             # Cargar datos
             datos_hojas = cargar_datos_google_sheets(url)
@@ -276,17 +283,15 @@ if urls_sheets:
                         st.subheader("📊 Estadísticas")
                         col1, col2, col3, col4 = st.columns(4)
                         
-                        col1.metric("Mínimo", f"{df[col_y].min():.2f}")
-                        col2.metric("Máximo", f"{df[col_y].max():.2f}")
-                        col3.metric("Promedio", f"{df[col_y].mean():.2f}")
-                        col4.metric("Desv. Est.", f"{df[col_y].std():.2f}")
+                        try:
+                            col1.metric("Mínimo", f"{df[col_y].min():.2f}")
+                            col2.metric("Máximo", f"{df[col_y].max():.2f}")
+                            col3.metric("Promedio", f"{df[col_y].mean():.2f}")
+                            col4.metric("Desv. Est.", f"{df[col_y].std():.2f}")
+                        except Exception as e:
+                            st.warning(f"Error al calcular estadísticas: {e}")
                     else:
                         st.info("No hay columnas numéricas para analizar.")
-                
-                # Actualización automática
-                if actualizar_automaticamente:
-                    time.sleep(intervalo_actualizacion)
-                    st.rerun()
             else:
                 st.error("No se pudieron cargar los datos. Verifica la URL y las credenciales.")
 else:

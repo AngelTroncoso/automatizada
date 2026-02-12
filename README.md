@@ -4,6 +4,7 @@
 
 1. Python 3.8 o superior instalado
 2. Cuenta de Google Cloud con acceso a Google Sheets API
+3. Git para clonar/desplegar el repositorio
 
 ## 🔐 Configuración de Google Cloud
 
@@ -29,19 +30,60 @@
 2. Copia el email de la cuenta de servicio (campo "client_email")
 3. En tus Google Sheets, comparte el documento con ese email
 
-## 🚀 Instalación y Ejecución
+## 🚀 Instalación y Ejecución Local
 
-### 1. Instalar dependencias
+### 1. Clonar o descargar el repositorio
+```bash
+git clone <tu-repositorio>
+cd automatizada
+```
+
+### 2. Instalar dependencias
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Ejecutar la aplicación
+### 3. Ejecutar la aplicación
 ```bash
 streamlit run app.py
 ```
 
 La aplicación se abrirá en tu navegador en `http://localhost:8501`
+
+## 🌐 Desplegar en Streamlit Cloud
+
+### Opción 1: Desde GitHub (Recomendado)
+
+1. Sube tu repositorio a GitHub
+2. Ve a [Streamlit Cloud](https://share.streamlit.io/)
+3. Haz clic en "New app"
+4. Selecciona tu repositorio y rama
+5. Selecciona `app.py` como archivo principal
+6. Haz clic en "Deploy"
+
+### Opción 2: Configurar secretos en Streamlit Cloud
+
+Después de desplegar, ve a los Settings de tu aplicación y añade:
+
+1. Copia el contenido completo del archivo `credentials.json`
+2. En "Secrets", añade:
+```toml
+[secrets]
+google_credentials = """
+{
+  "type": "service_account",
+  "project_id": "tu-project-id",
+  ...
+}
+"""
+```
+
+Luego actualiza el `app.py` para usar:
+```python
+import json
+import streamlit as st
+creds_dict = json.loads(st.secrets["google_credentials"])
+```
 
 ## 📁 Uso de Archivos de URLs
 
@@ -56,12 +98,13 @@ https://docs.google.com/spreadsheets/d/2xYzAbCdEfGhIjKlMnOpQrStUvWxYz789012/edit
 ## ✨ Características
 
 - ✅ Carga múltiples Google Sheets
-- ✅ Actualización automática configurable
+- ✅ Actualización manual con botón "Actualizar"
 - ✅ Filtrado y búsqueda de datos
 - ✅ Gráficos interactivos (línea, barras, dispersión, área)
 - ✅ Estadísticas descriptivas
 - ✅ Descarga de datos como CSV
 - ✅ Visualización de múltiples hojas en cada Sheet
+- ✅ Caché eficiente para optimizar rendimiento
 
 ## 📊 Tipos de Gráficos Disponibles
 
@@ -72,15 +115,17 @@ https://docs.google.com/spreadsheets/d/2xYzAbCdEfGhIjKlMnOpQrStUvWxYz789012/edit
 
 ## 🔧 Configuración Avanzada
 
-- **Intervalo de actualización**: 10-300 segundos (personalizable)
-- **Actualización automática**: Activable/desactivable por cada Sheet
+- **Caché de datos**: 60 segundos (ajustable en el código)
+- **Actualizaciones**: Botón manual para forzar actualización
 - **Filtros personalizados**: Búsqueda por columna
+- **Descarga**: Exporta datos filtrados como CSV
 
 ## ⚠️ Notas Importantes
 
-- Los datos se actualizan automáticamente cada X segundos si está habilitada la opción
+- Los datos se actualizan en caché cada 60 segundos
+- Haz clic en "Actualizar" para forzar una actualización inmediata
 - Requiere conexión a internet para acceder a Google Sheets
-- La primera carga puede tardar más tiempo
+- La autenticación con Google es obligatoria
 
 ## 🐛 Solución de Problemas
 
@@ -90,10 +135,29 @@ https://docs.google.com/spreadsheets/d/2xYzAbCdEfGhIjKlMnOpQrStUvWxYz789012/edit
 ### Error: "Permiso denegado"
 → Asegúrate de haber compartido el Google Sheet con el email de la cuenta de servicio
 
+### Error: "NotFoundError: Failed to execute 'removeChild' on 'Node'"
+→ Este error fue resuelto optimizando el manejo de caché y eliminando time.sleep()
+→ Usa la versión actualizada del código
+
 ### Los datos no se actualizan
-→ Verifica que la opción "Actualizar automáticamente" esté habilitada en la barra lateral
+→ Haz clic en el botón "🔄 Actualizar" para forzar una actualización
+→ O espera 60 segundos para que el caché expire automáticamente
+
+### Problemas de conexión a Google Sheets
+→ Verifica que la cuenta de servicio tenga acceso al Sheet
+→ Revisa las credenciales en Google Cloud Console
 
 ## 📞 Soporte
 
-Para más información sobre Streamlit: https://docs.streamlit.io/
-Para más información sobre Google Sheets API: https://developers.google.com/sheets/api
+Para más información sobre:
+- **Streamlit**: https://docs.streamlit.io/
+- **Google Sheets API**: https://developers.google.com/sheets/api
+- **Streamlit Cloud**: https://docs.streamlit.io/deploy/streamlit-cloud
+
+## 🎯 Próximas mejoras
+
+- [ ] Actualización automática basada en webhooks
+- [ ] Más tipos de gráficos
+- [ ] Exportación a otros formatos
+- [ ] Almacenamiento de reportes
+

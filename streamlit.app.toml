@@ -1,0 +1,10 @@
+[app]
+title = "Generador de Reportes Interactivos - Google Sheets"
+description = "Crea reportes interactivos desde Google Sheets con actualizaciones automáticas"
+icon = "📊"
+
+[runner]
+fastReruns = true
+
+[logger]
+level = "info"
