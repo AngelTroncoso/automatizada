@@ -1,0 +1,6 @@
+# Archivo de ejemplo para cargar URLs de Google Sheets
+# Copia las URLs de tus Google Sheets, una por línea
+
+# Ejemplo:
+# https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNoPqRsTuVwXyZ123456/edit
+# https://docs.google.com/spreadsheets/d/2xYzAbCdEfGhIjKlMnOpQrStUvWxYz789012/edit
