@@ -66,8 +66,13 @@ def cargar_datos_google_sheets(url):
             return None
         
         # Extraer ID del sheet del URL
-        if "docs.google.com/spreadsheets" in url:
-            sheet_id = url.split("/d/")[1].split("/")[0]
+        sheet_id = extraer_id_sheet(url)
+        
+        if not sheet_id:
+            st.error("URL inválida. Por favor, usa un URL de Google Sheets válido.")
+            return None
+        
+        try:
             sh = gc.open_by_key(sheet_id)
             
             # Cargar todas las hojas
@@ -78,23 +83,53 @@ def cargar_datos_google_sheets(url):
                     datos_hojas[worksheet.title] = pd.DataFrame(datos)
             
             return datos_hojas
-        else:
-            st.error("URL inválida. Por favor, usa un URL de Google Sheets válido.")
+        except Exception as e:
+            st.error(f"No se pudo acceder al sheet. Verifica que: 1) El link sea correcto y 2) El sheet esté compartido con la cuenta de servicio")
             return None
+            
     except Exception as e:
         st.error(f"Error al cargar datos: {e}")
         return None
 
 # Función para procesar un archivo con URLs
 def procesar_archivo_urls(archivo):
-    """Procesa un archivo de texto con URLs de Google Sheets"""
+    """Procesa un archivo Excel o de texto con URLs de Google Sheets"""
     try:
-        contenido = archivo.read().decode("utf-8")
-        urls = [url.strip() for url in contenido.split("\n") if url.strip()]
-        return urls
+        # Si es un archivo Excel
+        if archivo.name.endswith('.xlsx') or archivo.name.endswith('.xls'):
+            import openpyxl
+            df = pd.read_excel(archivo)
+            # Buscar URLs en todas las columnas
+            urls = []
+            for col in df.columns:
+                for val in df[col]:
+                    if isinstance(val, str) and "docs.google.com/spreadsheets" in val:
+                        urls.append(val.strip())
+            return urls if urls else []
+        else:
+            # Si es un archivo de texto
+            contenido = archivo.read().decode("utf-8")
+            urls = [url.strip() for url in contenido.split("\n") if url.strip() and "docs.google.com" in url]
+            return urls
     except Exception as e:
         st.error(f"Error al procesar archivo: {e}")
         return []
+
+# Función para extraer ID de diferentes formatos de URL
+def extraer_id_sheet(url):
+    """Extrae el ID del sheet de diferentes formatos de URL"""
+    try:
+        # Formato estándar: /d/{ID}/
+        if "/d/" in url:
+            sheet_id = url.split("/d/")[1].split("/")[0]
+            return sheet_id
+        # Formato de publicación: /d/e/{ID}/pubhtml
+        elif "/d/e/" in url:
+            sheet_id = url.split("/d/e/")[1].split("/")[0]
+            return sheet_id
+        return None
+    except:
+        return None
 
 # Barra lateral - Cargar URLs
 st.sidebar.title("⚙️ Configuración")
@@ -104,15 +139,15 @@ st.sidebar.subheader("1. Cargar URLs de Google Sheets")
 
 metodo_carga = st.sidebar.radio(
     "Elige el método de carga:",
-    ["📤 Subir archivo de texto", "📝 Pegar URLs directamente"]
+    ["� Subir archivo Excel/Texto", "📝 Pegar URLs directamente"]
 )
 
 urls_sheets = []
 
-if metodo_carga == "📤 Subir archivo de texto":
+if metodo_carga == "📥 Subir archivo Excel/Texto":
     archivo_cargado = st.sidebar.file_uploader(
-        "Sube un archivo de texto (.txt) con URLs (una por línea)",
-        type=["txt"]
+        "Sube un archivo Excel (.xlsx) o texto (.txt) con URLs",
+        type=["txt", "xlsx", "xls"]
     )
     if archivo_cargado:
         urls_sheets = procesar_archivo_urls(archivo_cargado)
@@ -124,7 +159,7 @@ else:
         "Pega las URLs de Google Sheets (una por línea):",
         height=100
     )
-    urls_sheets = [url.strip() for url in texto_urls.split("\n") if url.strip()]
+    urls_sheets = [url.strip() for url in texto_urls.split("\n") if url.strip() and "docs.google.com" in url]
     if urls_sheets:
         st.session_state.urls_cargadas = urls_sheets
 

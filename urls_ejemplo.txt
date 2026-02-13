@@ -1,6 +1,10 @@
 # Archivo de ejemplo para cargar URLs de Google Sheets
 # Copia las URLs de tus Google Sheets, una por línea
+# Soporta URLs estándar y URLs de publicación
 
-# Ejemplo:
+# URLs estándar:
 # https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNoPqRsTuVwXyZ123456/edit
-# https://docs.google.com/spreadsheets/d/2xYzAbCdEfGhIjKlMnOpQrStUvWxYz789012/edit
+
+# URLs de publicación (pubhtml):
+# https://docs.google.com/spreadsheets/d/e/2PACX-1vRtmL2ZeNzRJSApaCwn6ilV715IoSyoijjQ_TvPESVQ8geCOUqT0kTwjxMGQAm0s3CdnahmuCGj97kf/pubhtml
+

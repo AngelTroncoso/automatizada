@@ -87,12 +87,40 @@ creds_dict = json.loads(st.secrets["google_credentials"])
 
 ## 📁 Uso de Archivos de URLs
 
-### Formato del archivo de texto:
-Crea un archivo `.txt` con una URL de Google Sheets por línea:
+### Opción 1: Archivo Excel (.xlsx) ✨ **RECOMENDADO**
+
+Crea un archivo Excel con las URLs en una columna:
+
+```
+| URLs de Google Sheets |
+|----------------------|
+| https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNoPqRsTuVwXyZ123456/edit |
+| https://docs.google.com/spreadsheets/d/e/2PACX-1vRtmL2ZeNzRJSApaCwn6ilV715IoSyoijjQ_TvPESVQ8geCOUqT0kTwjxMGQAm0s3CdnahmuCGj97kf/pubhtml |
+```
+
+### Opción 2: Archivo de Texto (.txt)
+
+Archivo de texto con una URL por línea:
 
 ```
 https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNoPqRsTuVwXyZ123456/edit
-https://docs.google.com/spreadsheets/d/2xYzAbCdEfGhIjKlMnOpQrStUvWxYz789012/edit
+https://docs.google.com/spreadsheets/d/e/2PACX-1vRtmL2ZeNzRJSApaCwn6ilV715IoSyoijjQ_TvPESVQ8geCOUqT0kTwjxMGQAm0s3CdnahmuCGj97kf/pubhtml
+```
+
+### Opción 3: Pegar URLs Directamente
+
+Directamente en la interfaz usando el campo de texto.
+
+### 📌 Formatos de URL Soportados
+
+✅ **URL estándar:**
+```
+https://docs.google.com/spreadsheets/d/{ID}/edit
+```
+
+✅ **URL de publicación (pubhtml):**
+```
+https://docs.google.com/spreadsheets/d/e/{ID}/pubhtml
 ```
 
 ## ✨ Características

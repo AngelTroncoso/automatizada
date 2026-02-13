@@ -1,113 +1,123 @@
 # 🔧 Cambios Realizados - Solución de Errores
 
-## 🐛 Problema Original
+## 🐛 Problemas Resueltos
 
-Error en Streamlit Cloud:
+### 1. **Error de Compilación de Pandas 2.1.1 con Python 3.13**
 ```
-NotFoundError: Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node.
+Error: too few arguments to function '_PyLong_AsByteArray'
 ```
+**Solución:** Actualizar a pandas 2.2.0+ y depurar versiones en `requirements.txt`
 
-Este error ocurría debido a conflictos en el DOM de React causados por:
-- Uso de `time.sleep()` antes de `st.rerun()`
-- Manejo ineficiente del caché
-- Actualización automática conflictiva
+### 2. **Reconocimiento de URLs de Google Sheets**
+**Problema:** URLs de publicación (pubhtml) no eran reconocidas
+**Solución:** Crear función `extraer_id_sheet()` que soporta múltiples formatos
 
-## ✅ Soluciones Implementadas
+### 3. **Carga de Archivos Excel en lugar de Texto**
+**Problema:** Solo se permitían archivos .txt
+**Solución:** Agregar soporte para archivos Excel (.xlsx) con openpyxl
 
-### 1. **Eliminación de `time.sleep()` (Principal)**
+## ✅ Nuevas Funcionalidades
+
+### 1. **Soporte para Archivos Excel**
 ```python
-# ❌ ANTES (Problemático)
-if actualizar_automaticamente:
-    time.sleep(intervalo_actualizacion)  # ← Bloquea y causa conflictos
-    st.rerun()
-
-# ✅ DESPUÉS (Correcto)
-if st.button(f"🔄 Actualizar", key=f"btn_{tab_idx}"):
-    st.cache_data.clear()  # Limpia el caché
-    st.rerun()
+# Ahora soporta:
+- .xlsx (Excel moderno)
+- .xls (Excel antiguo)
+- .txt (Texto plano)
 ```
 
-### 2. **Optimización del Caché**
+### 2. **Reconocimiento de Múltiples Formatos de URL**
 ```python
-# Agregamos TTL (Time To Live) al caché
-@st.cache_data(ttl=60)  # Se actualiza automáticamente cada 60s
-def cargar_datos_google_sheets(url):
-    # ...
+# URLs estándar
+https://docs.google.com/spreadsheets/d/{ID}/edit
+
+# URLs de publicación (pubhtml)
+https://docs.google.com/spreadsheets/d/e/{ID}/pubhtml
 ```
 
-### 3. **Mejor Gestión de Session State**
-```python
-# Inicializamos session state al inicio
-if "urls_cargadas" not in st.session_state:
-    st.session_state.urls_cargadas = []
-if "auto_refresh_activos" not in st.session_state:
-    st.session_state.auto_refresh_activos = {}
+### 3. **Mejor Manejo de Errores**
+- Mensajes claros cuando el sheet no es accesible
+- Validación de URLs antes de procesarlas
+- Mejor feedback al usuario
+
+## 📝 Cambios en Archivos
+
+### `requirements.txt`
+- streamlit: 1.28.1 → ≥1.32.0
+- pandas: 2.1.1 → ≥2.2.0
+- google-auth: 2.25.2 → ≥2.27.0
+- **Nuevo:** openpyxl ≥3.11.0 (para leer Excel)
+
+### `app.py`
+**Nuevas funciones:**
+- `extraer_id_sheet(url)` - Extrae ID de diferentes formatos de URL
+- Actualizada `procesar_archivo_urls()` - Ahora soporta Excel y texto
+
+**Cambios de interfaz:**
+- Cambiado: "Subir archivo de texto" → "Subir archivo Excel/Texto"
+- Ahora acepta: .txt, .xlsx, .xls
+
+### `runtime.txt` (Nuevo)
+```
+python-3.11.7
+```
+Especifica Python 3.11 para mejor compatibilidad
+
+## 🎯 Flujo de Funcionamiento
+
+1. Usuario sube archivo Excel o .txt con URLs
+2. Sistema extrae URLs automáticamente
+3. Reconoce formatos estándar y pubhtml
+4. Conecta con Google Sheets API
+5. Carga datos y genera reportes
+
+## 📊 Formatos de Archivos Excel
+
+El sistema busca URLs en todas las columnas del Excel:
+
+```
+| Nombre | URL de Google Sheets | Descripción |
+|--------|---------------------|-------------|
+| Sheet 1 | https://docs.google.com/spreadsheets/d/{ID}/edit | Datos de ventas |
+| Sheet 2 | https://docs.google.com/spreadsheets/d/e/{ID}/pubhtml | Datos públicos |
 ```
 
-### 4. **Cambio de Actualizaciones Automáticas a Manuales**
-- Removemos la opción de actualización automática que causaba conflictos
-- Implementamos un botón "🔄 Actualizar" que limpia el caché
-- El caché se actualiza automáticamente cada 60 segundos
+## 🚀 Cómo Usar
 
-### 5. **Mejora de Manejo de Errores**
-```python
-# Agregamos try-except en estadísticas
-try:
-    col1.metric("Mínimo", f"{df[col_y].min():.2f}")
-    # ...
-except Exception as e:
-    st.warning(f"Error al calcular estadísticas: {e}")
-```
+### Opción 1: Excel (Recomendado)
+1. Crea un archivo .xlsx
+2. Agrega URLs en una columna
+3. Sube al Streamlit
 
-## 📁 Archivos Nuevos/Modificados
+### Opción 2: Texto
+1. Crea un archivo .txt
+2. Una URL por línea
+3. Sube al Streamlit
 
-### Nuevos Archivos:
-- `.streamlit/config.toml` - Configuración de tema y comportamiento
-- `.gitignore` - Archivos a ignorar en Git
-- `streamlit.app.toml` - Configuración de despliegue
+### Opción 3: Directo
+1. Pega URLs manualmente en el campo de texto
 
-### Archivos Modificados:
-- `app.py` - Optimización completa
-- `README.md` - Documentación actualizada
+## ⚠️ Requisitos Continuos
 
-## 🚀 Cómo Desplegar Correctamente
-
-### En Streamlit Cloud:
-1. Sube el código a GitHub
-2. No olvides configurar los secretos
-3. Streamlit Cloud automáticamente detectará `streamlit.app.toml`
-
-### Localmente:
-```bash
-streamlit run app.py
-```
-
-## 🎯 Ventajas de la Nueva Versión
-
-✅ **No hay errores de DOM** - Eliminada la causa raíz
-✅ **Mejor rendimiento** - Caché optimizado con TTL
-✅ **Más estable** - Manejo mejorado de errores
-✅ **Interfaz limpia** - Botón único para actualizar
-✅ **Compatible con Cloud** - Funciona perfectamente en Streamlit Cloud
-
-## 📊 Caché y Actualización
-
-- **TTL del caché**: 60 segundos
-- **Actualización manual**: Botón "🔄 Actualizar"
-- **Limpieza automática**: Al presionar actualizar
-- **Sin bloqueos**: Sin `time.sleep()` que afecte la experiencia
-
-## ⚠️ Importante
-
-No uses `time.sleep()` en Streamlit en producción, especialmente con `st.rerun()`.
-Esto causa conflictos en el DOM y errores como el que experimentaste.
+- ✅ Archivo `credentials.json` (Google Cloud)
+- ✅ Sheets compartidos con la cuenta de servicio
+- ✅ Conexión a internet
+- ✅ URLs válidas de Google Sheets
 
 ## 🔍 Verificación
 
 Para verificar que todo funciona:
-1. Carga un archivo de URLs
-2. Presiona el botón "🔄 Actualizar"
-3. No deberías ver errores en la consola
-4. Los datos se cargarán correctamente
+
+```bash
+# 1. Instala dependencias
+pip install -r requirements.txt
+
+# 2. Ejecuta localmente
+streamlit run app.py
+
+# 3. Prueba con un archivo Excel con URLs
+# 4. Prueba con URLs de publicación
+```
 
 ¡Listo para desplegar en Streamlit Cloud! 🎉
+
