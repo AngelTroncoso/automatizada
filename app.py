@@ -109,7 +109,7 @@ def procesar_archivo_urls(archivo):
         else:
             # Si es un archivo de texto
             contenido = archivo.read().decode("utf-8")
-            urls = [url.strip() for url in contenido.split("\n") if url.strip() and "docs.google.com" in url]
+            urls = [url.strip() for url in contenido.split("\n") if url.strip() and "docs.google.com" in url.lower()]
             return urls
     except Exception as e:
         st.error(f"Error al procesar archivo: {e}")
@@ -119,14 +119,17 @@ def procesar_archivo_urls(archivo):
 def extraer_id_sheet(url):
     """Extrae el ID del sheet de diferentes formatos de URL"""
     try:
+        url = url.strip()
         # Formato estándar: /d/{ID}/
-        if "/d/" in url:
-            sheet_id = url.split("/d/")[1].split("/")[0]
-            return sheet_id
+        if "/d/" in url and "/pubhtml" not in url:
+            sheet_id = url.split("/d/")[1].split("/")[0].strip()
+            if sheet_id:
+                return sheet_id
         # Formato de publicación: /d/e/{ID}/pubhtml
         elif "/d/e/" in url:
-            sheet_id = url.split("/d/e/")[1].split("/")[0]
-            return sheet_id
+            sheet_id = url.split("/d/e/")[1].split("/")[0].strip()
+            if sheet_id:
+                return sheet_id
         return None
     except:
         return None
@@ -137,14 +140,25 @@ st.sidebar.divider()
 
 st.sidebar.subheader("1. Cargar URLs de Google Sheets")
 
-metodo_carga = st.sidebar.radio(
-    "Elige el método de carga:",
-    ["� Subir archivo Excel/Texto", "📝 Pegar URLs directamente"]
-)
+# Detectar si estamos en Streamlit Cloud
+es_streamlit_cloud = False
+try:
+    es_streamlit_cloud = "streamlit.app" in st.config.get_config_object().server.get("server_address", "")
+except:
+    pass
+
+if es_streamlit_cloud:
+    st.sidebar.info("📝 **En Streamlit Cloud**: Pega directamente tu link de Google Sheets")
+    metodo_carga = "directo"
+else:
+    metodo_carga = st.sidebar.radio(
+        "Elige el método de carga:",
+        ["📥 Subir archivo Excel/Texto", "📝 Pegar URLs directamente"]
+    )
 
 urls_sheets = []
 
-if metodo_carga == "📥 Subir archivo Excel/Texto":
+if metodo_carga == "📥 Subir archivo Excel/Texto" and not es_streamlit_cloud:
     archivo_cargado = st.sidebar.file_uploader(
         "Sube un archivo Excel (.xlsx) o texto (.txt) con URLs",
         type=["txt", "xlsx", "xls"]
@@ -157,11 +171,24 @@ if metodo_carga == "📥 Subir archivo Excel/Texto":
 else:
     texto_urls = st.sidebar.text_area(
         "Pega las URLs de Google Sheets (una por línea):",
-        height=100
+        height=100,
+        placeholder="https://docs.google.com/spreadsheets/d/e/2PACX-1v.../pubhtml"
     )
-    urls_sheets = [url.strip() for url in texto_urls.split("\n") if url.strip() and "docs.google.com" in url]
+    # Procesar URLs con validación robusta
+    urls_items = texto_urls.split("\n")
+    urls_sheets = []
+    for url in urls_items:
+        url_limpio = url.strip()
+        if url_limpio and "google.com" in url_limpio.lower() and "spreadsheets" in url_limpio.lower():
+            sheet_id = extraer_id_sheet(url_limpio)
+            if sheet_id:
+                urls_sheets.append(url_limpio)
+    
     if urls_sheets:
         st.session_state.urls_cargadas = urls_sheets
+        st.sidebar.success(f"✅ {len(urls_sheets)} URL(s) válida(s)")
+    elif texto_urls.strip() and "google.com" in texto_urls.lower():
+        st.sidebar.warning("⚠️ No se pudo extraer ID válido")
 
 # Usar URLs guardadas en session state si existen
 if not urls_sheets and st.session_state.urls_cargadas:
