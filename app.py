@@ -26,32 +26,79 @@ if "auto_refresh_activos" not in st.session_state:
 
 st.title("📊 Generador de Reportes Interactivos - Google Sheets")
 
+# Verificar autenticación y mostrar instrucciones si es necesario
+autenticacion_disponible = False
+try:
+    autenticacion_disponible = (
+        "google_service_account" in st.secrets or 
+        os.path.exists("credentials.json")
+    )
+except:
+    pass
+
+if not autenticacion_disponible:
+    st.warning("⚠️ **Autenticación no configurada**")
+    with st.expander("📝 Haz clic aquí para configurar las credenciales", expanded=False):
+        st.markdown("""
+        ### Opción 1: Streamlit Cloud 🌐 (Recomendado)
+        1. Ve a tu app en [Streamlit Community Cloud](https://share.streamlit.io)
+        2. Haz clic en el menú (⋮) → **Settings** 
+        3. Selecciona **Secrets** en la barra lateral
+        4. En el editor de texto, pega tu archivo `credentials.json` con este formato:
+        ```
+        [google_service_account]
+        type = "service_account"
+        project_id = "tu-proyecto"
+        private_key_id = "..."
+        private_key = "-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n"
+        client_email = "tu-servicio@tu-proyecto.iam.gserviceaccount.com"
+        client_id = "..."
+        auth_uri = "https://accounts.google.com/o/oauth2/auth"
+        token_uri = "https://oauth2.googleapis.com/token"
+        auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
+        client_x509_cert_url = "..."
+        ```
+        5. Haz clic en **Save**
+        
+        ### Opción 2: Convertir a Sheet Público 🔓
+        1. Abre tu Google Sheet
+        2. Haz clic en **Compartir** (esquina superior derecha)
+        3. Selecciona **Cambiar** → **Cualquier persona con el link** → **Lector**
+        4. Copia el link del sheet
+        5. **¡Ya funciona sin credenciales!**
+        """)
+
 # Función para autenticar con Google Sheets
 @st.cache_resource
 def autenticar_google_sheets():
-    """Autentica con Google Sheets usando credenciales de servicio"""
+    """Autentica con Google Sheets usando credenciales de servicio o Streamlit Secrets"""
     try:
-        # Buscar archivo de credenciales
-        if os.path.exists("credentials.json"):
-            scopes = [
-                "https://www.googleapis.com/auth/spreadsheets.readonly",
-                "https://www.googleapis.com/auth/drive.readonly"
-            ]
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets.readonly",
+            "https://www.googleapis.com/auth/drive.readonly"
+        ]
+        
+        # Método 1: Streamlit Secrets (para Streamlit Cloud)
+        if "google_service_account" in st.secrets:
+            try:
+                creds_dict = st.secrets["google_service_account"]
+                creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+                return gspread.authorize(creds)
+            except Exception as e:
+                st.error(f"Error al autenticar con Secrets: {e}")
+                return None
+        
+        # Método 2: Archivo local (para desarrollo local)
+        elif os.path.exists("credentials.json"):
             creds = Credentials.from_service_account_file(
                 "credentials.json", scopes=scopes
             )
             return gspread.authorize(creds)
+        
+        # Método 3: No autenticado (solo para sheets públicas)
         else:
-            st.warning("⚠️ Archivo 'credentials.json' no encontrado. Por favor, sigue estos pasos:")
-            st.info("""
-            1. Ve a [Google Cloud Console](https://console.cloud.google.com/)
-            2. Crea un proyecto nuevo
-            3. Activa la API de Google Sheets y Google Drive
-            4. Crea una cuenta de servicio
-            5. Descarga las credenciales como JSON
-            6. Guarda el archivo como 'credentials.json' en esta carpeta
-            """)
             return None
+            
     except Exception as e:
         st.error(f"Error al autenticar: {e}")
         return None
@@ -62,10 +109,6 @@ def cargar_datos_google_sheets(url):
     """Carga datos de un URL de Google Sheets"""
     try:
         gc = autenticar_google_sheets()
-        if gc is None:
-            return None
-        
-        # Extraer ID del sheet del URL
         sheet_id = extraer_id_sheet(url)
         
         if not sheet_id:
@@ -73,7 +116,13 @@ def cargar_datos_google_sheets(url):
             return None
         
         try:
-            sh = gc.open_by_key(sheet_id)
+            # Intentar acceso autenticado
+            if gc is not None:
+                sh = gc.open_by_key(sheet_id)
+            else:
+                # Acceso sin autenticación (solo sheets públicos)
+                gc_public = gspread.Client(auth=None)
+                sh = gc_public.open_by_key(sheet_id)
             
             # Cargar todas las hojas
             datos_hojas = {}
@@ -82,13 +131,31 @@ def cargar_datos_google_sheets(url):
                 if datos:
                     datos_hojas[worksheet.title] = pd.DataFrame(datos)
             
+            if not datos_hojas:
+                st.warning("⚠️ El sheet no tiene datos o está vacío")
+                return None
+            
             return datos_hojas
+            
         except Exception as e:
-            st.error(f"No se pudo acceder al sheet. Verifica que: 1) El link sea correcto y 2) El sheet esté compartido con la cuenta de servicio")
+            error_msg = str(e).lower()
+            if "not found" in error_msg or "404" in error_msg:
+                st.error("❌ Sheet no encontrado. Verifica que el ID sea correcto.")
+            elif "permission" in error_msg or "unauthorized" in error_msg or "forbidden" in error_msg:
+                st.error("""
+                ❌ No tienes permiso para acceder a este sheet.
+                
+                **Opciones:**
+                1. **Convertir a público**: Abre el sheet → Compartir → Selecciona "Cualquier persona con el link" → Copiable
+                2. **Configurar Streamlit Secrets**: Ve a Streamlit dashboard → Settings → Secrets → Añade tu `credentials.json`
+                3. **Compartir con la cuenta de servicio**: Acceso directo con correo de credenciales
+                """)
+            else:
+                st.error(f"Error al cargar datos: {e}")
             return None
             
     except Exception as e:
-        st.error(f"Error al cargar datos: {e}")
+        st.error(f"Error inesperado: {e}")
         return None
 
 # Función para procesar un archivo con URLs
@@ -103,7 +170,7 @@ def procesar_archivo_urls(archivo):
             urls = []
             for col in df.columns:
                 for val in df[col]:
-                    if isinstance(val, str) and "docs.google.com/spreadsheets" in val:
+                    if isinstance(val, str) and "docs.google.com/spreadsheets" in val.lower():
                         urls.append(val.strip())
             return urls if urls else []
         else:
