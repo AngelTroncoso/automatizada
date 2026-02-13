@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 from datetime import datetime
 import json
 import os
+import requests
 
 # Configuración de la página
 st.set_page_config(
@@ -106,52 +107,105 @@ def autenticar_google_sheets():
 # Función para cargar datos de Google Sheets con caché
 @st.cache_data(ttl=60)
 def cargar_datos_google_sheets(url):
-    """Carga datos de un URL de Google Sheets"""
+    """Carga datos de un URL de Google Sheets (autenticado o público)"""
     try:
-        gc = autenticar_google_sheets()
         sheet_id = extraer_id_sheet(url)
         
         if not sheet_id:
             st.error("URL inválida. Por favor, usa un URL de Google Sheets válido.")
             return None
         
-        try:
-            # Intentar acceso autenticado
-            if gc is not None:
+        gc = autenticar_google_sheets()
+        
+        # Método 1: Intenta con autenticación (gspread)
+        if gc is not None:
+            try:
                 sh = gc.open_by_key(sheet_id)
-            else:
-                # Acceso sin autenticación (solo sheets públicos)
-                gc_public = gspread.Client(auth=None)
-                sh = gc_public.open_by_key(sheet_id)
+                datos_hojas = {}
+                for worksheet in sh.worksheets():
+                    datos = worksheet.get_all_records()
+                    if datos:
+                        datos_hojas[worksheet.title] = pd.DataFrame(datos)
+                
+                if not datos_hojas:
+                    st.warning("⚠️ El sheet no tiene datos o está vacío")
+                    return None
+                
+                return datos_hojas
+            except Exception as e:
+                error_msg = str(e).lower()
+                if "not found" in error_msg or "404" in error_msg:
+                    st.error("❌ Sheet no encontrado con autenticación")
+                    return None
+                elif "permission" in error_msg or "unauthorized" in error_msg or "forbidden" in error_msg:
+                    st.info("💡 Intentando acceso público...")
+                else:
+                    st.error(f"Error con autenticación: {e}")
+                    return None
+        
+        # Método 2: Acceso público mediante API REST de Google Sheets
+        try:
+            st.info("📖 Accediendo como sheet público...")
+            api_url = f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}?includeGridData=false&key=AIzaSyDaO-zIw2v2WB9bEd0ueblNDKfM9D7HE2g"
+            response = requests.get(api_url, timeout=10)
             
-            # Cargar todas las hojas
+            if response.status_code != 200:
+                st.error("""
+                ❌ No se pudo acceder al sheet.
+                
+                **Las causas más comunes son:**
+                1. El sheet no es público. Solución: Abre el sheet → Compartir → "Cualquier persona con el link" → Lector
+                2. El link es inválido
+                3. El sheet fue eliminado
+                """)
+                return None
+            
+            # Obtener metadatos del sheet
+            spreadsheet_data = response.json()
+            sheet_titles = [sheet['properties']['title'] for sheet in spreadsheet_data.get('sheets', [])]
+            
+            if not sheet_titles:
+                st.warning("⚠️ El sheet no tiene hojas")
+                return None
+            
             datos_hojas = {}
-            for worksheet in sh.worksheets():
-                datos = worksheet.get_all_records()
-                if datos:
-                    datos_hojas[worksheet.title] = pd.DataFrame(datos)
+            
+            # Cargar datos de cada hoja
+            for sheet_title in sheet_titles:
+                try:
+                    # API para obtener valores
+                    range_name = f"'{sheet_title}'"
+                    values_url = f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values/{range_name}?key=AIzaSyDaO-zIw2v2WB9bEd0ueblNDKfM9D7HE2g"
+                    values_response = requests.get(values_url, timeout=10)
+                    
+                    if values_response.status_code == 200:
+                        values = values_response.json().get('values', [])
+                        
+                        if len(values) > 0:
+                            # Primera fila como encabezados
+                            headers = values[0]
+                            rows = values[1:]
+                            
+                            # Crear DataFrame
+                            df = pd.DataFrame(rows, columns=headers)
+                            # Limpiar espacios en blanco en encabezados
+                            df.columns = df.columns.str.strip()
+                            datos_hojas[sheet_title] = df
+                except Exception as e:
+                    st.warning(f"⚠️ No se pudo cargar la hoja '{sheet_title}': {e}")
+                    continue
             
             if not datos_hojas:
-                st.warning("⚠️ El sheet no tiene datos o está vacío")
+                st.warning("⚠️ No se encontraron datos en el sheet")
                 return None
             
             return datos_hojas
             
+        except requests.exceptions.Timeout:
+            st.error("⏱️ Timeout: La solicitud tardó demasiado. Intenta de nuevo.")
+            return None
         except Exception as e:
-            error_msg = str(e).lower()
-            if "not found" in error_msg or "404" in error_msg:
-                st.error("❌ Sheet no encontrado. Verifica que el ID sea correcto.")
-            elif "permission" in error_msg or "unauthorized" in error_msg or "forbidden" in error_msg:
-                st.error("""
-                ❌ No tienes permiso para acceder a este sheet.
-                
-                **Opciones:**
-                1. **Convertir a público**: Abre el sheet → Compartir → Selecciona "Cualquier persona con el link" → Copiable
-                2. **Configurar Streamlit Secrets**: Ve a Streamlit dashboard → Settings → Secrets → Añade tu `credentials.json`
-                3. **Compartir con la cuenta de servicio**: Acceso directo con correo de credenciales
-                """)
-            else:
-                st.error(f"Error al cargar datos: {e}")
+            st.error(f"Error al cargar datos: {e}")
             return None
             
     except Exception as e:
